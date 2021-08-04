@@ -15,3 +15,7 @@ Assumes:
 - Configure
 - `cargo run --release`
 - Send `/auth <secret>` to authorize yourself
+
+## License
+
+AGPL. See the `LICENSE` file for more detail.
