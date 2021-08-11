@@ -59,7 +59,7 @@ fn get_config() -> &'static Config {
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let config: Config = toml::from_str(&read_to_string("autobean.toml")?)?;
+    let config: Config = toml::from_str(&read_to_string("bot.toml")?)?;
     CONFIG.set(config).unwrap();
     run().await
 }
