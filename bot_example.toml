@@ -1,0 +1,11 @@
+[bot]
+# your telegram bot token
+token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+# authentication message
+secret = "p@ssw0rd"
+
+[beancount]
+# path to the beancount directory
+root = "/path/to/beancount"
+# default currency when currency is omitted
+default_currency = "CNY"
