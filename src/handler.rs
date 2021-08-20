@@ -35,7 +35,8 @@ pub async fn auth(context: Arc<Command<Text>>, state: Arc<RwLock<Database>>) -> 
             }
             guard.auth_users.push(user.id.0);
             serde_json::to_writer(File::create(state_file)?, &*guard)?;
-            context.send_message_in_reply("Authorized!").call().await?;
+            context.send_message("Authorized!").call().await?;
+            context.delete_this_message().call().await?;
         }
     }
     Ok(())
