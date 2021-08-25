@@ -8,8 +8,8 @@ pub fn check_repo(repo: &str) -> Result<()> {
         .args(&["-C", repo, "pull", "--rebase"])
         .output()
         .context("execution of git pull --rebase failed")?;
-    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).to_string();
         return Err(anyhow!("git pull --rebase failed").context(stderr));
     }
 
