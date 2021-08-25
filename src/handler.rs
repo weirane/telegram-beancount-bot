@@ -42,6 +42,24 @@ pub async fn auth(context: Arc<Command<Text>>, state: Arc<RwLock<Database>>) -> 
     Ok(())
 }
 
+/// Handler for command `/accounts`
+pub async fn accounts(context: Arc<Command<Text>>, _state: Arc<RwLock<Database>>) -> Result<()> {
+    check_repo(&get_config().beancount.root).context("Check repo failed")?;
+    let mut accounts = get_accounts(&get_config().beancount.root).context("get accounts failed")?;
+    let query = context.text.value.to_lowercase();
+    let query: Vec<_> = query.split_ascii_whitespace().collect();
+    let accs: Vec<_> = if query.is_empty() {
+        accounts
+    } else {
+        accounts
+            .drain(..)
+            .filter(|ac| query.iter().all(|q| ac.to_lowercase().contains(q)))
+            .collect()
+    };
+    context.send_message(&accs.join(" ")).call().await?;
+    Ok(())
+}
+
 /// Handler for messages
 pub async fn command(context: Arc<Text>, _state: Arc<RwLock<Database>>) -> Result<()> {
     let accounts = get_accounts(&get_config().beancount.root).context("get accounts failed")?;

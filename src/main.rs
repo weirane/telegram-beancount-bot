@@ -96,6 +96,22 @@ async fn run() -> Result<()> {
         }
     });
 
+    bot.command_if(
+        "accounts",
+        |context, state| async move {
+            if let Some(User { id: user_id, .. }) = context.from {
+                state.read().await.auth_users.contains(&user_id.0)
+            } else {
+                false
+            }
+        },
+        |context, state| async {
+            if let Err(e) = handler::accounts(context, state).await {
+                debug!("{:?}", e);
+            }
+        },
+    );
+
     bot.text_if(
         |context, state| async move {
             if let Some(User { id: user_id, .. }) = context.from {
