@@ -96,7 +96,7 @@ impl<'ac, 'am: 'ac> Transaction<'ac, 'am> {
         // if narration.is_empty() {
         //     return Err(anyhow!("Empty narration"));
         // }
-        let amount = Amount::from_str(&cmd_amount, default_currency)
+        let amount = Amount::from_str(cmd_amount, default_currency)
             .ok_or_else(|| anyhow!("Invalid amount {}", cmd_amount))?;
 
         let spend_accounts: Vec<_> = filter_account(accounts, cmd_spd_acc)
@@ -159,7 +159,7 @@ impl<'a> Amount<'a> {
         let regex = regex!(r"^([0-9.]+)\s*([A-Z][A-Z0-9'._-]{0,22}[A-Z0-9])?$");
         let caps = regex.captures(s)?;
         let number: Decimal = caps.get(1).and_then(|n| n.as_str().parse().ok())?;
-        let currency = caps.get(2).map_or(default_currency, |c| c.as_str()).into();
+        let currency = caps.get(2).map_or(default_currency, |c| c.as_str());
         Some(Self { number, currency })
     }
 }
@@ -180,7 +180,7 @@ impl<'ac, 'am> fmt::Display for Transaction<'ac, 'am> {
         // first line
         write!(f, "{} *", self.date.format("%F"))?;
         if let Some(ref payee) = self.payee {
-            write!(f, r#" "{}""#, escape_string(&payee))?;
+            write!(f, r#" "{}""#, escape_string(payee))?;
         }
         write!(f, r#" "{}""#, escape_string(&self.narration))?;
         for tag in self.tags.iter() {

@@ -26,11 +26,7 @@ pub async fn auth(context: Arc<Command<Text>>, state: Arc<RwLock<Database>>) -> 
         {
             let mut guard = state.write().await;
             if log::log_enabled!(log::Level::Info) {
-                let username = user
-                    .username
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or("<noname>");
+                let username = user.username.as_deref().unwrap_or("<noname>");
                 info!("Authorizing user {} (@{})", user.id.0, username);
             }
             guard.auth_users.push(user.id.0);
