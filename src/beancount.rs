@@ -30,39 +30,45 @@ pub struct Amount<'a> {
     pub currency: &'a str,
 }
 
-fn choose_account<'a>(accounts: &[&'a String], term: &str) -> Result<&'a String> {
-    match accounts.len() {
-        0 => Err(anyhow!("No matched account")),
-        1 => Ok(accounts[0]),
-        _ => {
-            // check if the last components of accounts has a unique match
-            let last_match: Vec<_> = accounts
-                .iter()
-                .filter(|a| {
-                    last_component(a)
-                        .to_lowercase()
-                        .contains(&term.to_lowercase())
-                })
-                .collect();
-            match last_match.len() {
-                0 => Err(anyhow!("More than one matched account: {:?}", accounts)),
-                1 => Ok(last_match[0]),
-                _ => Err(anyhow!("More than one matched account: {:?}", last_match)),
-            }
-        }
-    }
+/// Determines whether `account` matches the lowercased search term `term`. If the term contains
+/// whitespace, all subterms in the term has to appear in the account.
+fn account_matches(account: &str, term: &str) -> bool {
+    let loweraccount = account.to_lowercase();
+    term.split_ascii_whitespace()
+        .all(|t| loweraccount.contains(t))
 }
 
 fn filter_account<'a>(
-    accounts: &'a [String], //
-    term: &'a str,
-) -> impl Iterator<Item = &'a String> {
+    accounts: &'a [String],
+    term: &str,
+    pred: impl Fn(&&String) -> bool,
+) -> Result<&'a String> {
     // 1. last component
     // 2. full account name
-    // TODO: allow space-separated search terms (if all contains)
-    accounts
+    let term = term.to_lowercase();
+    let matched: Vec<_> = accounts
         .iter()
-        .filter(move |x| x.to_lowercase().contains(&term.to_lowercase()))
+        .filter(|ac| account_matches(ac, &term) && pred(ac))
+        .collect();
+    match matched.len() {
+        0 => Err(anyhow!("No matched account")),
+        1 => Ok(matched[0]),
+        _ => {
+            // check if the last components of accounts has a unique match
+            let last_match: Vec<_> = matched
+                .iter()
+                .filter(|ac| account_matches(last_component(ac), &term))
+                .collect();
+            match last_match.len() {
+                0 => Err(anyhow!("More than one matched account: {:?}", matched)),
+                1 => Ok(last_match[0]),
+                _ => Err(anyhow!(
+                    "More than one last-component matched account: {:?}",
+                    last_match
+                )),
+            }
+        }
+    }
 }
 
 impl<'ac, 'am: 'ac> Transaction<'ac, 'am> {
@@ -99,16 +105,10 @@ impl<'ac, 'am: 'ac> Transaction<'ac, 'am> {
         let amount = Amount::from_str(cmd_amount, default_currency)
             .ok_or_else(|| anyhow!("Invalid amount {}", cmd_amount))?;
 
-        let spend_accounts: Vec<_> = filter_account(accounts, cmd_spd_acc)
-            .filter(|x| !x.starts_with("Expenses:"))
-            .collect();
-        let expense_accounts: Vec<_> = filter_account(accounts, cmd_exp_acc)
-            .filter(|x| x.starts_with("Expenses:"))
-            .collect();
-        let account =
-            choose_account(&spend_accounts, cmd_spd_acc).context("Invalid spend account")?;
-        let expense_account =
-            choose_account(&expense_accounts, cmd_exp_acc).context("Invalid expense account")?;
+        let account = filter_account(accounts, cmd_spd_acc, |x| !x.starts_with("Expenses:"))
+            .context("Invalid spend account")?;
+        let expense_account = filter_account(accounts, cmd_exp_acc, |x| x.starts_with("Expenses:"))
+            .context("Invalid expense account")?;
         let postings = vec![
             Posting::new(expense_account, amount.clone()),
             Posting::new(account, -amount),
@@ -236,4 +236,59 @@ pub fn get_accounts(path: impl AsRef<Path>) -> io::Result<Vec<String>> {
         }
     }
     Ok(ret)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_matches() {
+        assert!(account_matches("Expenses:Transport:Public:Bus", "bus"));
+        assert!(account_matches("Expenses:Transport:Bus", "transp bus"));
+        assert!(account_matches("Expenses:Transport:Bus", " transp  bus "));
+    }
+
+    #[test]
+    fn test_filter() {
+        let accounts: Vec<_> = vec![
+            "Assets:Cash:CNY",
+            "Assets:Cash:USD",
+            "Expenses:International:Fees",
+            "Expenses:Food:Groceries",
+            "Expenses:Health:Dental:Insurance",
+            "Expenses:Health:Life:GroupTermLife",
+            "Expenses:Health:Medical:Insurance",
+            "Expenses:Health:Vision:Insurance",
+            "Expenses:Home:Internet",
+            "Expenses:Home:Phone",
+            "Expenses:Home:Rent",
+        ]
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+        let pred = |s: &&String| s.starts_with("Expenses:");
+        assert!(
+            format!("{}", filter_account(&accounts, "insur", pred).unwrap_err())
+                .starts_with("More than one last-component matched account: ")
+        );
+        assert!(
+            format!("{}", filter_account(&accounts, "health", pred).unwrap_err())
+                .starts_with("More than one matched account: ")
+        );
+        // whole account unique match
+        assert_eq!(
+            filter_account(&accounts, "dental", pred).unwrap(),
+            "Expenses:Health:Dental:Insurance"
+        );
+        // last component unique match
+        assert_eq!(
+            filter_account(&accounts, "inter", pred).unwrap(),
+            "Expenses:Home:Internet"
+        );
+        // multiple terms match
+        assert_eq!(
+            filter_account(&accounts, "med insur", pred).unwrap(),
+            "Expenses:Health:Medical:Insurance"
+        );
+    }
 }
