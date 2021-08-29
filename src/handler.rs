@@ -60,7 +60,7 @@ pub async fn accounts(context: Arc<Command<Text>>, _state: Arc<RwLock<Database>>
 pub async fn command(context: Arc<Text>, _state: Arc<RwLock<Database>>) -> Result<()> {
     let accounts = get_accounts(&get_config().beancount.root).context("get accounts failed")?;
     let cmd_split = command_split(&context.text.value)
-        .ok_or_else(|| anyhow!("Invalid command {}", context.text.value))?;
+        .with_context(|| anyhow!("Invalid command '{}'", context.text.value))?;
     let txn = Transaction::today_from_command(
         &cmd_split,
         &accounts,
