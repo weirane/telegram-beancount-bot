@@ -3,7 +3,7 @@ use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
@@ -43,31 +43,44 @@ fn filter_account<'a>(
     term: &str,
     pred: impl Fn(&&String) -> bool,
 ) -> Result<&'a String> {
-    // 1. last component
-    // 2. full account name
     let term = term.to_lowercase();
+    // full account name match
     let matched: Vec<_> = accounts
         .iter()
         .filter(|ac| account_matches(ac, &term) && pred(ac))
         .collect();
     match matched.len() {
-        0 => Err(anyhow!("No matched account")),
-        1 => Ok(matched[0]),
-        _ => {
-            // check if the last components of accounts has a unique match
-            let last_match: Vec<_> = matched
-                .iter()
-                .filter(|ac| account_matches(last_component(ac), &term))
-                .collect();
-            match last_match.len() {
-                0 => Err(anyhow!("More than one matched account: {:?}", matched)),
-                1 => Ok(last_match[0]),
-                _ => Err(anyhow!(
-                    "More than one last-component matched account: {:?}",
-                    last_match
-                )),
-            }
-        }
+        0 => bail!("No matched account"),
+        1 => return Ok(matched[0]),
+        _ => {}
+    }
+
+    // last component match
+    let last_match: Vec<_> = matched
+        .iter()
+        .filter(|ac| account_matches(last_component(ac), &term))
+        .collect();
+    match last_match.len() {
+        0 => bail!("More than one matched account: {:?}", matched),
+        1 => return Ok(last_match[0]),
+        _ => {}
+    }
+
+    // last component exact match
+    let last_exact_match: Vec<_> = matched
+        .iter()
+        .filter(|ac| last_component(ac).to_lowercase() == term)
+        .collect();
+    match last_exact_match.len() {
+        0 => bail!(
+            "More than one last-component matched account: {:?}",
+            last_match
+        ),
+        1 => Ok(last_exact_match[0]),
+        _ => bail!(
+            "More than one last-component exact-match account: {:?}",
+            last_exact_match
+        ),
     }
 }
 
@@ -262,6 +275,8 @@ mod tests {
             "Expenses:Home:Internet",
             "Expenses:Home:Phone",
             "Expenses:Home:Rent",
+            "Expenses:Tele:Mail",
+            "Expenses:Tele:Email",
         ]
         .iter()
         .map(ToString::to_string)
@@ -271,6 +286,11 @@ mod tests {
             format!("{}", filter_account(&accounts, "insur", pred).unwrap_err())
                 .starts_with("More than one last-component matched account: ")
         );
+        assert!(format!(
+            "{}",
+            filter_account(&accounts, "insurance", pred).unwrap_err()
+        )
+        .starts_with("More than one last-component exact-match account: "));
         assert!(
             format!("{}", filter_account(&accounts, "health", pred).unwrap_err())
                 .starts_with("More than one matched account: ")
@@ -284,6 +304,11 @@ mod tests {
         assert_eq!(
             filter_account(&accounts, "inter", pred).unwrap(),
             "Expenses:Home:Internet"
+        );
+        // last component unique exact match
+        assert_eq!(
+            filter_account(&accounts, "mail", pred).unwrap(),
+            "Expenses:Tele:Mail"
         );
         // multiple terms match
         assert_eq!(
