@@ -1,4 +1,3 @@
-#![allow(clippy::while_let_on_iterator)]
 use anyhow::Result;
 
 // got the idea from `shlex` crate
@@ -60,6 +59,7 @@ mod shlex {
         }
 
         fn parse_single(&mut self, result: &mut String) -> Result<()> {
+            #[allow(clippy::while_let_on_iterator)]
             while let Some(ch) = self.in_iter.next() {
                 match ch {
                     '\'' => return Ok(()),
